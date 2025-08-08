@@ -1,11 +1,12 @@
 import os
 import pdfplumber
 import tempfile
+import uuid
 from pinecone import Pinecone as PineconeClient, ServerlessSpec
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_pinecone import Pinecone as LangchainPinecone
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import PDFPlumberLoader
+from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_community.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
@@ -37,6 +38,8 @@ vectorstore = LangchainPinecone.from_existing_index(
 print("✅ Pinecone + OpenAI embedding setup complete.")
 
 # Use pdfplumber to load documents
+
+
 def process_document(filename, content):
     # Save the file temporarily
     temp_file_path = os.path.join(tempfile.gettempdir(), filename)
@@ -55,14 +58,26 @@ def process_document(filename, content):
         raise ValueError("No text extracted from PDF")
 
     # Split text into documents for LangChain
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000, chunk_overlap=100)
     chunks = splitter.split_text(text)
 
     docs = [Document(page_content=chunk) for chunk in chunks]
 
+    # Initialize embedding model
+    embedding_model = OpenAIEmbeddings()
+
+    # Connect to Pinecone index
+    vectorstore = LangchainPinecone.from_documents(
+        documents=docs,
+        embedding=embedding_model,
+        index_name=INDEX_NAME
+    )
+
     # Summarize using LangChain's summarize chain
-    llm = ChatOpenAI(temperature=0.3, model="gpt-4")  
-    chain = load_summarize_chain(llm, chain_type="stuff")  # options: map_reduce, refine, stuff
+    llm = ChatOpenAI(temperature=0.3, model="gpt-4")
+    # options: map_reduce, refine, stuff
+    chain = load_summarize_chain(llm, chain_type="stuff")
 
     summary = chain.run(docs)
 
@@ -70,6 +85,7 @@ def process_document(filename, content):
         "chunks": docs,
         "summary": summary
     }
+
 
 def query_document(question):
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)

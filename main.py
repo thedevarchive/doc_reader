@@ -17,6 +17,8 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from document_handler import process_document, query_document
+from pydantic import BaseModel
+from fastapi import Body
 
 app = FastAPI()
 
@@ -29,6 +31,9 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+class Question(BaseModel):
+    question: str
+
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     content = await file.read()
@@ -39,6 +44,9 @@ async def upload_file(file: UploadFile = File(...)):
     }
 
 @app.post("/ask/")
-async def ask_question(question: str = Form(...)):
-    # Use retriever or QA chain here
-    return {"answer": "Example answer"}
+async def ask_question(payload: Question):
+    try:
+        answer = query_document(payload.question)
+        return {"answer": answer}
+    except Exception as e:
+        return {"error": str(e)}
